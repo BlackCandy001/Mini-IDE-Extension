@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini-IDE</title>
+  <link rel="stylesheet" href="sidepanel.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 256 256"><path d="M216,72H131.31L104,44.69A15.86,15.86,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V88A16,16,0,0,0,216,72Zm0,128H40V56H92.69l27.31,27.31A15.86,15.86,0,0,0,131.31,88H216Z"></path></svg>
+        <span>Mini-IDE</span>
+      </div>
+      <div class="actions">
+        <button id="toggle-sidebar" title="Toggle Explorer">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M224,56V200a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V56A16,16,0,0,1,48,40H208A16,16,0,0,1,224,56ZM208,56H160V200h48V56ZM144,200V56H48V200h96Z"></path></svg>
+        </button>
+        <button id="open-folder" title="Open Folder">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M216,72H131.31L104,44.69A15.86,15.86,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V88A16,16,0,0,0,216,72Zm0,128H40V56H92.69l27.31,27.31A15.86,15.86,0,0,0,131.31,88H216ZM152,136H136v16a8,8,0,0,1-16,0V136H104a8,8,0,0,1,0-16h16V104a8,8,0,0,1,16,0v16h16a8,8,0,0,1,0,16Z"></path></svg>
+        </button>
+        <button id="new-folder" title="New Folder" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M216,72H131.31L104,44.69A15.88,15.88,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V88A16,16,0,0,0,216,72Zm0,128H40V56H92.69l27.31,27.31A15.86,15.86,0,0,0,131.31,88H216ZM152,136H136v16a8,8,0,0,1-16,0V136H104a8,8,0,0,1,0-16h16V104a8,8,0,0,1,16,0v16h16a8,8,0,0,1,0,16Z"></path></svg>
+        </button>
+        <button id="new-file" title="New File" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 256 256"><path d="M213.66,82.34l-56-56A8,8,0,0,0,152,24H56A16,16,0,0,0,40,40V216a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V88A8,8,0,0,0,213.66,82.34ZM160,51.31,188.69,80H160ZM200,216H56V40h88V88a8,8,0,0,0,8,8h48Zm-40-72a8,8,0,0,1-8,8H136v16a8,8,0,0,1-16,0V152H104a8,8,0,0,1,0-16h16V120a8,8,0,0,1,16,0v16h16A8,8,0,0,1,160,144Z"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="app-content">
+      <section class="editor-container">
+        <div class="editor-header">
+          <span id="current-filename">No file open</span>
+          <div class="status-indicator" id="save-status"></div>
+        </div>
+        <div id="editor-wrapper" class="editor-wrapper">
+          <div id="line-numbers" class="line-numbers"></div>
+          <!-- The editor will be injected here -->
+          <textarea id="editor" spellcheck="false" placeholder="Select a file to edit..."></textarea>
+          <pre id="highlighting" aria-hidden="true"><code></code></pre>
+        </div>
+      </section>
+
+      <div id="resizer" class="resizer"></div>
+
+      <aside class="sidebar">
+        <div class="explorer-header">EXPLORER</div>
+        <div id="file-tree" class="file-tree">
+          <div class="empty-state">
+            <p>Select a folder to start coding</p>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="app-footer">
+      <div class="footer-left" id="file-info">
+        Ready
+      </div>
+      <div class="footer-right">
+        <button id="save-file" class="btn-primary" disabled>
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm-24,16V80H72V48ZM160,208H96V144h64Zm48,0H176V144a16,16,0,0,0-16-16H96a16,16,0,0,0-16,16v64H48V48H56V80a16,16,0,0,0,16,16h112a16,16,0,0,0,16-16V48h8v160Z"></path></svg> 
+          Save
+        </button>
+      </div>
+    </footer>
+  </div>
+
+  <script src="sidepanel.js" type="module"></script>
+</body>
+</html>

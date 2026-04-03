@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Mini-IDE",
+  "version": "1.0.0",
+  "description": "A lightweight IDE in your sidebar using File System Access.",
+  "permissions": ["sidePanel", "storage"],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Open Mini-IDE"
+  },
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+}
