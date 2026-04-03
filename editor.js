@@ -38,7 +38,103 @@ export class Editor {
   setContent(content, filename) {
     this.textarea.value = content;
     this.currentFilename = filename;
+    this.currentExtension = filename ? filename.split('.').pop().toLowerCase() : '';
     this.update();
+  }
+
+  format() {
+    const code = this.textarea.value;
+    if (!code) return;
+
+    let formatted = '';
+    
+    // SMART DISPATCHER: Detect type by content or extension
+    const isHTMLContent = code.trim().startsWith('<') || (code.includes('<') && code.includes('>'));
+    const isBraceContent = code.includes('{') && code.includes('}');
+    
+    const braceExts = ['js', 'css', 'json', 'cs', 'java', 'cpp', 'c', 'ts'];
+    const htmlExts = ['html', 'xml', 'aspx', 'cshtml', 'svg', 'php'];
+
+    if (htmlExts.includes(this.currentExtension) || (isHTMLContent && !isBraceContent)) {
+      formatted = this.formatHTML(code);
+    } else if (braceExts.includes(this.currentExtension) || isBraceContent) {
+      formatted = this.formatJS(code);
+    } else {
+      // For other files, just trim lines
+      formatted = code.split('\n').map(line => line.trim()).join('\n');
+    }
+
+    this.textarea.value = formatted;
+    this.update();
+    
+    // Trigger input event to notify sidepanel of changes (dirty state)
+    this.textarea.dispatchEvent(new Event('input'));
+  }
+
+  formatJS(code) {
+    const lines = code.split('\n');
+    let indent = 0;
+    const result = [];
+
+    for (let line of lines) {
+      let trimmed = line.trim();
+      if (!trimmed) {
+        result.push('');
+        continue;
+      }
+
+      // Decrease indent if line starts with closing brace
+      if (trimmed.startsWith('}') || trimmed.startsWith(']')) {
+        indent = Math.max(0, indent - 1);
+      }
+
+      result.push('  '.repeat(indent) + trimmed);
+
+      // Increase indent if line ends with opening brace
+      // We look for { or [ that isn't followed by a closing one on the same line
+      const openBraces = (trimmed.match(/\{|\[/g) || []).length;
+      const closeBraces = (trimmed.match(/\}|\]/g) || []).length;
+      indent += (openBraces - closeBraces);
+      if (indent < 0) indent = 0;
+    }
+
+    return result.join('\n');
+  }
+
+  formatHTML(html) {
+    // 1. Put tags and content on new lines
+    let formatted = html
+      .replace(/>\s*</g, '>\n<')
+      .replace(/(<[^\/!].*?>)/g, '\n$1')
+      .replace(/(<\/[^>]+?>)/g, '\n$1')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line !== '')
+      .join('\n');
+
+    const lines = formatted.split('\n');
+    let indent = 0;
+    const result = [];
+    const selfClosingTags = ['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
+
+    for (let line of lines) {
+      if (line.match(/^<\//)) {
+        // Closing tag
+        indent = Math.max(0, indent - 1);
+      }
+
+      result.push('  '.repeat(indent) + line);
+
+      if (line.match(/^<[^\/!]/) && !line.match(/\/>$/)) {
+        // Opening tag (that is not self-closing)
+        const tagName = line.match(/^<([a-z0-9]+)/i)?.[1]?.toLowerCase();
+        if (tagName && !selfClosingTags.includes(tagName)) {
+          indent++;
+        }
+      }
+    }
+
+    return result.join('\n');
   }
 
   handleKeyDown(e) {
@@ -53,35 +149,53 @@ export class Editor {
   }
 
   applyHighlighting() {
-    let html = this.highlight.textContent
+    let text = this.highlight.textContent
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
     
-    // IMPORTANT: Order matters to avoid "double-processing" HTML tags.
-    // We process tokens from the code itself before we add our own <span> tags.
+    // ARCHITECTURAL FIX: Token-based Placeholder System
+    // We "pluck" sensitive items (Tags, Strings, Comments) out of the text
+    // and replace them with placeholders. This prevents keywords/CSS rules
+    // from matching INSIDE the HTML tags we add for highlighting.
     
-    // 1. Strings (Highest priority, highly protective)
-    html = html.replace(/("(.*?)")/g, '<span style="color: #fbbf24">$1</span>')
-               .replace(/('(.*?)')/g, '<span style="color: #fbbf24">$1</span>')
-               .replace(/(`(.*?)`)/g, '<span style="color: #fbbf24">$1</span>');
-    
-    // 2. Comments (Protective)
-    html = html.replace(/(\/\/.+)/g, '<span style="color: #94a3b8">$1</span>')
-               .replace(/(\/\*[\s\S]*?\*\/)/g, '<span style="color: #94a3b8">$1</span>');
+    const tokens = [];
+    let tokenIndex = 0;
+    const addToken = (content, style) => {
+        const id = `\x01${tokenIndex++}\x02`;
+        tokens.push({ id, content, style });
+        return id;
+    };
 
-    // 3. Keywords (standard word boundaries)
-    html = html.replace(/\b(const|let|var|function|return|if|else|for|while|import|export|from|class|await|async|try|catch|default|case|switch|await|async|type|interface|enum)\b/g, '<span style="color: #f472b6">$1</span>');
-    
-    // 4. CSS Selectors & properties (Simple but effective)
-    // Run this BEFORE HTML tags because they contain 'style:' inside the span attributes.
-    html = html.replace(/\b([a-z-]+):(?!\/\/)/g, '<span style="color: #9333ea">$1</span>:');
-    
-    // 5. HTML Tags
-    // RUN THIS LAST. Once these spans are added, the highlighter stops.
-    // This prevents other regexes from matching inside the <span> tags themselves.
-    html = html.replace(/(&lt;\/?[a-z0-9]+)(.*?)&gt;/g, '<span style="color: #60a5fa">$1</span>$2<span style="color: #60a5fa">&gt;</span>');
+    // 1. Extract Strings (Highest priority, protect quoted text)
+    text = text.replace(/("(.*?)")|('(.*?)')|(`(.*?)`)/g, (match) => {
+        return addToken(match, 'color: #fbbf24');
+    });
 
-    this.highlight.innerHTML = html;
+    // 2. Extract Comments (Protective)
+    text = text.replace(/(\/\/.+)|(\/\*[\s\S]*?\*\/)/g, (match) => {
+        return addToken(match, 'color: #94a3b8');
+    });
+
+    // 3. Extract HTML Tags (Between &lt; and &gt;)
+    text = text.replace(/(&lt;\/?[a-z0-9]+)(.*?)&gt;/g, (match, tagStart, tagAttrs) => {
+        // We highlight the tag itself but protect its internal attributes
+        const highlightedTag = `<span style="color: #60a5fa">${tagStart}</span>${tagAttrs}<span style="color: #60a5fa">&gt;</span>`;
+        return addToken(highlightedTag, null); // null style because we already added spans
+    });
+
+    // 4. Highlight Keywords & CSS Properties on the CLEAN text
+    // Now it's impossible for these to match inside a tag or string!
+    text = text.replace(/\b(const|let|var|function|return|if|else|for|while|import|export|from|class|await|async|try|catch|default|case|switch|await|async|type|interface|enum)\b/g, '<span style="color: #f472b6">$1</span>');
+    text = text.replace(/\b([a-z-]+):(?!\/\/)/g, '<span style="color: #9333ea">$1</span>:');
+
+    // 5. Restore Tokens
+    // We do this in reverse or repeatedly until all markers are gone
+    tokens.forEach(token => {
+        const replacement = token.style ? `<span style="${token.style}">${token.content}</span>` : token.content;
+        text = text.replace(token.id, replacement);
+    });
+
+    this.highlight.innerHTML = text;
   }
 }

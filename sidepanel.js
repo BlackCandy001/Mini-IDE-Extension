@@ -16,6 +16,7 @@ const saveStatus = document.getElementById('save-status');
 const editorTextarea = document.getElementById('editor');
 const resizer = document.getElementById('resizer');
 const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+const formatCodeBtn = document.getElementById('format-code');
 
 // IndexedDB Storage Helpers
 async function setStoredHandle(handle) {
@@ -101,6 +102,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const currentlyHidden = document.body.classList.toggle('sidebar-hidden');
         toggleSidebarBtn.classList.toggle('active', currentlyHidden);
         localStorage.setItem('sidebarHidden', currentlyHidden);
+    });
+
+    formatCodeBtn.addEventListener('click', () => {
+        if (editor) editor.format();
     });
     
     // Check for stored handle
@@ -387,6 +392,7 @@ async function loadFile(handle) {
             filenameDisplay.textContent = handle.name;
             fileInfo.textContent = 'Unsupported file format';
             saveFileBtn.disabled = true;
+            formatCodeBtn.disabled = true;
             updateSaveState(false);
             return;
         }
@@ -397,8 +403,9 @@ async function loadFile(handle) {
         editor.setContent(currentFileContent, handle.name);
         filenameDisplay.textContent = handle.name;
         fileInfo.textContent = `Full path: ${handle.name}`;
-        updateSaveState(false);
         saveFileBtn.disabled = false;
+        formatCodeBtn.disabled = false;
+        updateSaveState(false);
     } catch (err) {
         console.error('Error loading file:', err);
         fileInfo.textContent = 'Error loading file';
@@ -456,6 +463,7 @@ async function deleteEntry(handle, parentHandle) {
             filenameDisplay.textContent = 'No file open';
             fileInfo.textContent = 'File deleted';
             saveFileBtn.disabled = true;
+            formatCodeBtn.disabled = true;
             updateSaveState(false);
         }
         
