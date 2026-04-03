@@ -1,9 +1,13 @@
 import { Editor } from './editor.js';
 
 let rootHandle = null;
-let currentFileHandle = null;
-let currentFileContent = '';
 let editor = null;
+
+// NEW State for Pro-IDE features
+let openTabs = []; // Array of { id, handle, content, isDirty }
+let activeTabId = null;
+let autoSaveTimer = null;
+let searchResults = [];
 
 const fileTree = document.getElementById('file-tree');
 const openFolderBtn = document.getElementById('open-folder');
@@ -17,6 +21,14 @@ const editorTextarea = document.getElementById('editor');
 const resizer = document.getElementById('resizer');
 const toggleSidebarBtn = document.getElementById('toggle-sidebar');
 const formatCodeBtn = document.getElementById('format-code');
+
+// NEW UI Elements
+const tabBar = document.getElementById('tab-bar');
+const autoSaveToggle = document.getElementById('auto-save-toggle');
+const searchToggle = document.getElementById('search-toggle');
+const searchPane = document.getElementById('search-pane');
+const searchInput = document.getElementById('global-search-input');
+const searchResultsContainer = document.getElementById('search-results');
 
 // IndexedDB Storage Helpers
 async function setStoredHandle(handle) {
@@ -107,6 +119,44 @@ document.addEventListener('DOMContentLoaded', async () => {
     formatCodeBtn.addEventListener('click', () => {
         if (editor) editor.format();
     });
+
+    // NEW Logic: Tab, Auto-Save, Search Listeners
+    searchToggle.addEventListener('click', () => {
+        searchPane.classList.toggle('hidden');
+        if (!searchPane.classList.contains('hidden')) {
+            searchInput.focus();
+        }
+    });
+
+    searchInput.addEventListener('input', async (e) => {
+        const query = e.target.value.trim();
+        if (query.length < 3) {
+            searchResultsContainer.innerHTML = '';
+            return;
+        }
+        await performSearch(query);
+    });
+
+    editorTextarea.addEventListener('input', () => {
+        if (!activeTabId) return;
+        
+        const activeTab = openTabs.find(t => t.id === activeTabId);
+        if (activeTab) {
+            if (!activeTab.isDirty) {
+                activeTab.isDirty = true;
+                renderTabs();
+            }
+            updateSaveState(true);
+            
+            // Auto-Save implementation
+            if (autoSaveToggle.checked) {
+                clearTimeout(autoSaveTimer);
+                autoSaveTimer = setTimeout(() => {
+                    saveActiveFile();
+                }, 1000);
+            }
+        }
+    });
     
     // Check for stored handle
     try {
@@ -118,11 +168,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('Failed to load stored handle:', err);
     }
 
-    // Listen for editor changes
-    editorTextarea.addEventListener('input', () => {
-        const isDirty = editorTextarea.value !== currentFileContent;
-        updateSaveState(isDirty);
-    });
+    // Listen for editor changes is handled above in the tab/auto-save logic
 });
 
 function showRestoreUI(handle) {
@@ -383,54 +429,119 @@ async function loadFile(handle) {
         // Basic check for non-text files
         const binaryExts = ['pdf', 'zip', 'exe', 'bin', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mp3', 'woff', 'woff2', 'ttf', 'mov', 'docx'];
         const ext = handle.name.split('.').pop().toLowerCase();
-        const isBinaryMime = file.type && (file.type.startsWith('image/') || file.type.startsWith('video/') || file.type.startsWith('audio/'));
+        const content = await file.text();
+        const id = Date.now().toString();
         
-        if (binaryExts.includes(ext) || isBinaryMime) {
-            currentFileHandle = handle;
-            currentFileContent = '';
-            editor.setContent('// Cannot read file: This is a binary or unsupported file format.', handle.name);
-            filenameDisplay.textContent = handle.name;
-            fileInfo.textContent = 'Unsupported file format';
-            saveFileBtn.disabled = true;
-            formatCodeBtn.disabled = true;
-            updateSaveState(false);
-            return;
-        }
-
-        currentFileContent = await file.text();
-        currentFileHandle = handle;
-        
-        editor.setContent(currentFileContent, handle.name);
-        filenameDisplay.textContent = handle.name;
-        fileInfo.textContent = `Full path: ${handle.name}`;
-        saveFileBtn.disabled = false;
-        formatCodeBtn.disabled = false;
-        updateSaveState(false);
+        openTabs.push({ id, handle, content, isDirty: false });
+        switchToTab(id);
     } catch (err) {
-        console.error('Error loading file:', err);
-        fileInfo.textContent = 'Error loading file';
+        console.error('Error adding tab:', err);
     }
+}
+
+function switchToTab(id) {
+    const tab = openTabs.find(t => t.id === id);
+    if (!tab) return;
+
+    activeTabId = id;
+    editor.setContent(tab.content, tab.handle.name);
+    filenameDisplay.textContent = tab.handle.name;
+    fileInfo.textContent = `Path: ${tab.handle.name}`;
+    
+    saveFileBtn.disabled = false;
+    formatCodeBtn.disabled = false;
+    updateSaveState(tab.isDirty);
+    renderTabs();
+}
+
+function closeTab(id) {
+    const index = openTabs.findIndex(t => t.id === id);
+    if (index === -1) return;
+
+    const removed = openTabs.splice(index, 1)[0];
+    
+    if (openTabs.length === 0) {
+        activeTabId = null;
+        editor.setContent('', '');
+        filenameDisplay.textContent = 'No file open';
+        saveFileBtn.disabled = true;
+        formatCodeBtn.disabled = true;
+        updateSaveState(false);
+    } else if (id === activeTabId) {
+        // Switch to the nearest tab
+        const nextIndex = Math.min(index, openTabs.length - 1);
+        switchToTab(openTabs[nextIndex].id);
+    }
+    
+    renderTabs();
+}
+
+// Global Search
+async function performSearch(query) {
+    if (!rootHandle) return;
+    searchResultsContainer.innerHTML = '<p class="empty-state">Searching...</p>';
+    searchResults = [];
+    
+    await searchRecursive(rootHandle, query, '');
+    
+    if (searchResults.length === 0) {
+        searchResultsContainer.innerHTML = '<p class="empty-state">No matches found</p>';
+    } else {
+        renderSearchResults();
+    }
+}
+
+async function searchRecursive(handle, query, path) {
+    // Ignore heavy system folders
+    if (handle.name === 'node_modules' || handle.name === '.git' || handle.name === '.gemini') return;
+
+    if (handle.kind === 'directory') {
+        for await (const entry of handle.values()) {
+            await searchRecursive(entry, query, `${path}${handle.name}/`);
+        }
+    } else {
+        try {
+            const file = await handle.getFile();
+            const text = await file.text();
+            
+            if (text.toLowerCase().includes(query.toLowerCase())) {
+                const lines = text.split('\n');
+                lines.forEach((line, index) => {
+                    if (line.toLowerCase().includes(query.toLowerCase())) {
+                        searchResults.push({
+                            handle,
+                            path: `${path}${handle.name}`,
+                            line: index + 1,
+                            content: line.trim()
+                        });
+                    }
+                });
+            }
+        } catch (e) {
+            // Skip binary or unreadable files
+        }
+    }
+}
+
+function renderSearchResults() {
+    searchResultsContainer.innerHTML = '';
+    searchResults.forEach(res => {
+        const item = document.createElement('div');
+        item.className = 'search-item';
+        item.innerHTML = `
+            <div class="search-item-file">${res.path} (Line ${res.line})</div>
+            <div class="search-item-line">${res.content.replace(new RegExp(searchInput.value, 'gi'), match => `<span class="search-item-match">${match}</span>`)}</div>
+        `;
+        item.addEventListener('click', () => {
+            addTab(res.handle);
+        });
+        searchResultsContainer.appendChild(item);
+    });
 }
 
 // Save File
 saveFileBtn.addEventListener('click', async () => {
-    if (!currentFileHandle) return;
-    
-    try {
-        const writable = await currentFileHandle.createWritable();
-        const content = editorTextarea.value;
-        await writable.write(content);
-        await writable.close();
-        
-        currentFileContent = content;
-        updateSaveState(false);
-        fileInfo.textContent = `Saved: ${currentFileHandle.name}`;
-        saveStatus.className = 'status-indicator saved';
-        setTimeout(() => saveStatus.className = 'status-indicator', 2000);
-    } catch (err) {
-        console.error('Error saving file:', err);
-        fileInfo.textContent = 'Error saving (permission?)';
-    }
+    await saveActiveFile();
 });
 
 // New Folder (Header)
@@ -456,15 +567,12 @@ async function deleteEntry(handle, parentHandle) {
         
         await parentHandle.removeEntry(handle.name, { recursive: true });
         
-        if (currentFileHandle && currentFileHandle.name === handle.name) {
-            currentFileHandle = null;
-            currentFileContent = '';
-            editor.setContent('', '');
-            filenameDisplay.textContent = 'No file open';
-            fileInfo.textContent = 'File deleted';
-            saveFileBtn.disabled = true;
-            formatCodeBtn.disabled = true;
-            updateSaveState(false);
+        // Clear active tab if it was deleted
+        if (activeTabId) {
+            const activeTab = openTabs.find(t => t.id === activeTabId);
+            if (activeTab && activeTab.handle.name === handle.name) {
+                closeTab(activeTabId);
+            }
         }
         
         await renderFileTree();

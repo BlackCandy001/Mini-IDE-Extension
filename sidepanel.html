@@ -43,6 +43,7 @@
             <div class="status-indicator" id="save-status"></div>
           </div>
         </div>
+        <div id="tab-bar" class="tab-bar"></div>
         <div id="editor-wrapper" class="editor-wrapper">
           <div id="line-numbers" class="line-numbers"></div>
           <!-- The editor will be injected here -->
@@ -54,7 +55,18 @@
       <div id="resizer" class="resizer"></div>
 
       <aside class="sidebar">
-        <div class="explorer-header">EXPLORER</div>
+        <div class="explorer-header">
+          EXPLORER
+          <button id="search-toggle" title="Global Search">
+             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"></path></svg>
+          </button>
+        </div>
+        <div id="search-pane" class="search-pane hidden">
+          <div class="search-input-container">
+            <input type="text" id="global-search-input" placeholder="Search in project...">
+          </div>
+          <div id="search-results" class="search-results"></div>
+        </div>
         <div id="file-tree" class="file-tree">
           <div class="empty-state">
             <p>Select a folder to start coding</p>
@@ -68,6 +80,13 @@
         Ready
       </div>
       <div class="footer-right">
+        <div class="footer-actions">
+          <div class="toggle-container" title="Auto Save">
+            <span>Auto-Save</span>
+            <input type="checkbox" id="auto-save-toggle">
+          </div>
+          <div class="status-indicator" id="save-status"></div>
+        </div>
         <button id="save-file" class="btn-primary" disabled>
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 256 256"><path d="M208,32H48A16,16,0,0,0,32,48V208a16,16,0,0,0,16,16H208a16,16,0,0,0,16-16V48A16,16,0,0,0,208,32Zm-24,16V80H72V48ZM160,208H96V144h64Zm48,0H176V144a16,16,0,0,0-16-16H96a16,16,0,0,0-16,16v64H48V48H56V80a16,16,0,0,0,16,16h112a16,16,0,0,0,16-16V48h8v160Z"></path></svg> 
           Save

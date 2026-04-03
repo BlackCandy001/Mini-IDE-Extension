@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Mini-IDE",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A lightweight IDE in your sidebar using File System Access.",
   "permissions": ["sidePanel", "storage"],
   "side_panel": {
