@@ -363,6 +363,14 @@ button i {
   font-size: 13px;
   line-height: 1.5;
   outline: none;
+  box-sizing: border-box;
+  margin: 0;
+  tab-size: 2;
+  -moz-tab-size: 2;
+  letter-spacing: 0;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #editor {
@@ -372,12 +380,13 @@ button i {
   resize: none;
   z-index: 2;
   white-space: pre;
+  overflow: auto;
 }
 
 #highlighting {
   pointer-events: none;
   white-space: pre;
-  overflow: auto;
+  overflow: hidden; /* textarea handles the scrolling */
   z-index: 1;
   color: var(--text-primary);
 }

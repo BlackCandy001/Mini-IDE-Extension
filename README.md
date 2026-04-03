@@ -1,4 +1,4 @@
-# 💻 Mini-IDE (v1.0.1)
+# 💻 Mini-IDE (v1.0.3)
 
 **Mini-IDE** là một trình soạn thảo mã nguồn (Mini-IDE) cao cấp được tích hợp ngay trên Side Panel của trình duyệt Chrome. Với phong cách thiết kế **Glassmorphism** hiện đại và hiệu năng tối ưu, công cụ này cho phép bạn truy cập và chỉnh sửa trực tiếp các tệp mã nguồn cục bộ một cách an toàn và mạnh mẽ.
 
@@ -74,5 +74,5 @@
 
 ## 📄 Giấy phép & Liên hệ
 
-- **Phiên bản**: 1.0.1
+- **Phiên bản**: 1.0.3
 - **Tác giả**: [Black Candy 🍫]

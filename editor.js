@@ -167,8 +167,9 @@ export class Editor {
         return id;
     };
 
-    // 1. Extract Strings (Highest priority, protect quoted text)
-    text = text.replace(/("(.*?)")|('(.*?)')|(`(.*?)`)/g, (match) => {
+    // 1. Extract Strings (Highest priority, protect quoted text with escape support)
+    // Regex matches double, single, and backtick quotes including escaped chars like \"
+    text = text.replace(/("(?:[^"\\]|\\.)*")|('(?:[^'\\]|\\.)*')|(`(?:[^`\\]|\\.)*`)/g, (match) => {
         return addToken(match, 'color: #fbbf24');
     });
 
@@ -179,21 +180,33 @@ export class Editor {
 
     // 3. Extract HTML Tags (Between &lt; and &gt;)
     text = text.replace(/(&lt;\/?[a-z0-9]+)(.*?)&gt;/g, (match, tagStart, tagAttrs) => {
-        // We highlight the tag itself but protect its internal attributes
+        // We highlight the tag itself but protect its internal attributes (which may contain string tokens)
         const highlightedTag = `<span style="color: #60a5fa">${tagStart}</span>${tagAttrs}<span style="color: #60a5fa">&gt;</span>`;
         return addToken(highlightedTag, null); // null style because we already added spans
     });
 
     // 4. Highlight Keywords & CSS Properties on the CLEAN text
-    // Now it's impossible for these to match inside a tag or string!
+    // Now it's logically impossible for these to match inside a tag or string!
     text = text.replace(/\b(const|let|var|function|return|if|else|for|while|import|export|from|class|await|async|try|catch|default|case|switch|await|async|type|interface|enum)\b/g, '<span style="color: #f472b6">$1</span>');
     text = text.replace(/\b([a-z-]+):(?!\/\/)/g, '<span style="color: #9333ea">$1</span>:');
 
-    // 5. Restore Tokens
-    // We do this in reverse or repeatedly until all markers are gone
-    tokens.forEach(token => {
+    // 5. Recursive/Safe Token Restoration
+    // We restore tokens in reverse. If Token B was inside Token A, we must 
+    // inject B's content into A's content BEFORE A is restored to the text.
+    [...tokens].reverse().forEach(token => {
         const replacement = token.style ? `<span style="${token.style}">${token.content}</span>` : token.content;
-        text = text.replace(token.id, replacement);
+        
+        // 5a. Replace marker in the global text
+        // Use split/join for literal replacement to avoid $ symbol issues in .replace()
+        text = text.split(token.id).join(replacement);
+        
+        // 5b. IMPORTANT: Replace marker in ALL other tokens' content!
+        // This handles nested tokens (e.g., a string inside an HTML tag attribute)
+        tokens.forEach(otherToken => {
+            if (otherToken.content.includes(token.id)) {
+                otherToken.content = otherToken.content.split(token.id).join(replacement);
+            }
+        });
     });
 
     this.highlight.innerHTML = text;
